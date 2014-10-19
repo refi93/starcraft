@@ -15,6 +15,7 @@ public class JavaBot implements BWAPIEventListener {
 	boolean refineryBuilt = false;
 	boolean barrackBuilt = false;
 	boolean academyBuilt = false;
+	boolean supplyDepotBuilt = false;
 	int mineral_counter = 0;
 
 	private JNIBWAPI bwapi;
@@ -74,19 +75,20 @@ public class JavaBot implements BWAPIEventListener {
 		// Cycle over all my units,
 		for (Unit unit : bwapi.getMyUnits()) {
 			// if this unit is a command center (Terran_Command_Center)
-			if (unit.getTypeID() == UnitTypes.Terran_Command_Center.ordinal()) {
+			/*if (unit.getTypeID() == UnitTypes.Terran_Command_Center.ordinal()) {
 				// if it's training queue is empty
 				if (unit.getTrainingQueueSize() == 0) {
 					// check if we have enough minerals and supply, and (if we do) train one worker (Terran_SCV)
 					if ((bwapi.getSelf().getMinerals() >= 50) && (bwapi.getSelf().getSupplyTotal()-bwapi.getSelf().getSupplyUsed() >= 2)) 
 						bwapi.train(unit.getID(), UnitTypes.Terran_SCV.ordinal());
 				}
-			}
+			}*/
 			if (unit.getTypeID() == UnitTypes.Terran_Barracks.ordinal()) {
 				// if it's training queue is empty
 				if (unit.getTrainingQueueSize() == 0) {
 					// check if we have enough minerals and supply, and (if we do) train one worker (Terran_SCV)
-					if ((bwapi.getSelf().getMinerals() >= 50) && (bwapi.getSelf().getMinerals() >= 25)&& (bwapi.getSelf().getSupplyTotal()-bwapi.getSelf().getSupplyUsed() >= 2)) 
+					if ((bwapi.getSelf().getMinerals() >= 50) && (bwapi.getSelf().getGas() >= 25)&& (bwapi.getSelf().getSupplyTotal()-bwapi.getSelf().getSupplyUsed() >= 2)) 
+						System.out.println("FIREBAT");
 						bwapi.train(unit.getID(), UnitTypes.Terran_Firebat.ordinal());
 				}
 			}
@@ -119,8 +121,7 @@ public class JavaBot implements BWAPIEventListener {
 					int closestId = -1;
 					double closestDist = 99999999;
 					for (Unit neu : bwapi.getNeutralUnits()) {
-						if ((neu.getTypeID() == UnitTypes.Resource_Mineral_Field.ordinal() && !refineryBuilt)) {
-							System.out.println(neu.getTypeID() == UnitTypes.Terran_Refinery.ordinal());
+						if ((neu.getTypeID() == UnitTypes.Resource_Mineral_Field.ordinal() && !refineryBuilt)) { 
 							double distance = Math.sqrt(Math.pow(neu.getX() - unit.getX(), 2) + Math.pow(neu.getY() - unit.getY(), 2));
 							if ((closestId == -1) || (distance < closestDist)) {
 								closestDist = distance;
@@ -186,9 +187,9 @@ public class JavaBot implements BWAPIEventListener {
 		
 		
 		// And let's build some Supply Depots if we are low on supply (if free supply is less than 3).
-		if (((bwapi.getSelf().getSupplyTotal() - bwapi.getSelf().getSupplyUsed())/2) < 3) {
-			// Check if we have enough minerals,
-			if (!refineryBuilt && bwapi.getSelf().getMinerals() >= 100) {
+		// Check if we have enough minerals,
+		if (((bwapi.getSelf().getSupplyTotal() - bwapi.getSelf().getSupplyUsed())/2) < 3){
+			if (bwapi.getSelf().getMinerals() >= 100) {
 				// try to find the worker near our home position
 				int worker = getNearestUnit(UnitTypes.Terran_SCV.ordinal(), homePositionX, homePositionY);
 				if (worker != -1) {
@@ -202,7 +203,6 @@ public class JavaBot implements BWAPIEventListener {
 				}
 			}
 		}
-		
 		
 		
 		// ==========================================================
