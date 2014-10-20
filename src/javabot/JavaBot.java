@@ -1,6 +1,14 @@
 package javabot;
 
 import java.awt.Point;
+import java.io.BufferedReader;
+import java.io.FileNotFoundException;
+import java.io.FileReader;
+import java.io.IOException;
+import java.lang.annotation.RetentionPolicy;
+import java.util.Random;
+import java.util.Vector;
+
 import javabot.model.*;
 import javabot.types.*;
 import javabot.types.OrderType.OrderTypeTypes;
@@ -12,11 +20,13 @@ public class JavaBot implements BWAPIEventListener {
 	// Some miscelaneous variables. Feel free to add yours.
 	int homePositionX;
 	int homePositionY;
-	boolean refineryBuilt = false;
-	boolean barrackBuilt = false;
-	boolean academyBuilt = false;
-	boolean supplyDepotBuilt = false;
-	int mineral_counter = 0;
+	int survivedFrames;
+	double temperature = 60000;
+	int currentSwap = 0; // which elements we are swapping
+	
+	Vector<UnitType.UnitTypes> killOrder  = new Vector<UnitType.UnitTypes>();
+	Vector<UnitType.UnitTypes> prevOrder = null;
+	int prevScore = -10;
 
 	private JNIBWAPI bwapi;
 	public static void main(String[] args) {
@@ -25,6 +35,7 @@ public class JavaBot implements BWAPIEventListener {
 	public JavaBot() {
 		bwapi = new JNIBWAPI(this);
 		bwapi.start();
+		
 	} 
 	public void connected() {
 		bwapi.loadTypeData();
@@ -32,174 +43,94 @@ public class JavaBot implements BWAPIEventListener {
 	
 	// Method called at the beginning of the game.
 	public void gameStarted() {		
-		System.out.println("Game Started");
-
-		// allow me to manually control units during the game
+		System.out.println("Game Started12");
 		bwapi.enableUserInput();
+		bwapi.setGameSpeed(0);
 		
-		// set game speed to 30 (0 is the fastest. Tournament speed is 20)
-		// You can also change the game speed from within the game by "/speed X" command.
-		bwapi.setGameSpeed(30);
 		
-		// analyze the map
-		bwapi.loadMapData(true);
-		
-		// ============== YOUR CODE GOES HERE =======================
-
-		// This is called at the beginning of the game. You can 
-		// initialize some data structures (or do something similar) 
-		// if needed. For example, you should maintain a memory of seen 
-		// enemy buildings.
-		
+		if (killOrder.size() < 1)
+		{
+			killOrder.add(UnitTypes.Zerg_Ultralisk);
+			killOrder.add(UnitTypes.Zerg_Drone);
+			killOrder.add(UnitTypes.Zerg_Broodling);
+			killOrder.add(UnitTypes.Zerg_Zergling);
+		}
 		bwapi.printText("Hello world!");
-		bwapi.printText("This map is called "+bwapi.getMap().getName());
-		bwapi.printText("My race ID: "+String.valueOf(bwapi.getSelf().getRaceID()));				// Z=0,T=1,P=2
-		bwapi.printText("Enemy race ID: "+String.valueOf(bwapi.getEnemies().get(0).getRaceID()));	// Z=0,T=1,P=2
+	    temperature = temperature * 0.95;
 		
-		// ==========================================================
+		/* EDIT HERE */
+	}
+	
+	
+	
+	public boolean heuristics(double temp, int prev, int cur){
+		double exp = -((double) Math.pow(prev - cur, 2)) * (1/(double) temp);
+		System.out.println("pravdepodobnost je" + Math.pow(Math.E, exp));
+		return Math.pow(Math.E, exp) > (new Random()).nextDouble();
+	}
+	
+	public void gameEnded() {
+		/* ALSO EDIT HERE */
+		int curScore = bwapi.getFrameCount(); // get current score
+		
+		Random rand = new Random();
+		
+		System.out.println(curScore);
+		
+		// if found better solution or heuristics say yes, then move to current kill order
+		if ((curScore > prevScore) || heuristics(temperature, prevScore, curScore)){
+			prevOrder = killOrder;
+			prevScore = curScore;
+			System.out.println("accepted");
+			System.out.println(prevOrder);
+		}
+		
+		// try new neighbour
+		killOrder = swapNeighbours(prevOrder, rand.nextInt(killOrder.size() - 1));
+	}
+	
+	public Vector<UnitType.UnitTypes> swapNeighbours(Vector<UnitType.UnitTypes> x, int index){
+		// copy
+		Vector<UnitType.UnitTypes> ret = new Vector<UnitType.UnitTypes>();
+		for(int i = 0;i < x.size(); i++){
+			ret.add(x.elementAt(i));
+		}
+		
+		if (index >= x.size()) return null;
+		
+		// now swap
+		UnitType.UnitTypes pom = ret.get(index);
+		ret.set(index, ret.elementAt(index + 1));
+		ret.set(index + 1, pom);
+		
+		//return
+		return ret;
 	}
 	
 	
 	// Method called once every second.
 	public void act() {
-		
-		// ============== YOUR CODE GOES HERE =======================
-
-		// This method is called every 30th frame (approx. once a 
-		// second). You can use other methods in this class, but the 
-		// majority of your agent's behaviour will probably be here.
-		
-		
-		
-		// First, let's train workers at our Command Center.
-		// Cycle over all my units,
+		survivedFrames++;
 		for (Unit unit : bwapi.getMyUnits()) {
-			// if this unit is a command center (Terran_Command_Center)
-			/*if (unit.getTypeID() == UnitTypes.Terran_Command_Center.ordinal()) {
-				// if it's training queue is empty
-				if (unit.getTrainingQueueSize() == 0) {
-					// check if we have enough minerals and supply, and (if we do) train one worker (Terran_SCV)
-					if ((bwapi.getSelf().getMinerals() >= 50) && (bwapi.getSelf().getSupplyTotal()-bwapi.getSelf().getSupplyUsed() >= 2)) 
-						bwapi.train(unit.getID(), UnitTypes.Terran_SCV.ordinal());
-				}
-			}*/
-			if (unit.getTypeID() == UnitTypes.Terran_Barracks.ordinal()) {
-				// if it's training queue is empty
-				if (unit.getTrainingQueueSize() == 0) {
-					// check if we have enough minerals and supply, and (if we do) train one worker (Terran_SCV)
-					if ((bwapi.getSelf().getMinerals() >= 50) && (bwapi.getSelf().getGas() >= 25)&& (bwapi.getSelf().getSupplyTotal()-bwapi.getSelf().getSupplyUsed() >= 2)) 
-						System.out.println("FIREBAT");
-						bwapi.train(unit.getID(), UnitTypes.Terran_Firebat.ordinal());
-				}
-			}
-		}
-		
-		if (barrackBuilt && bwapi.getSelf().getMinerals() >= 700) {
-			// try to find the worker near our home position
-			int worker = getNearestUnit(UnitTypes.Terran_SCV.ordinal(), homePositionX, homePositionY);
-			if (worker != -1) {
-				// if we found him, try to select appropriate build tile position for barracks (near our home base)
-				Point buildTile = getBuildTile(worker, UnitTypes.Terran_Academy.ordinal(), homePositionX, homePositionY);
-				// if we found a good build position, and we aren't already constructing a Supply Depot, 
-				// order our worker to build it
-				if ((buildTile.x != -1)) {
-					academyBuilt = true;
-					bwapi.build(worker, buildTile.x, buildTile.y, UnitTypes.Terran_Academy.ordinal());
-				}
-			}
-		}
-
-		// Now let's mine minerals with your idle workers.
-		// Cycle over all my units,
-		for (Unit unit : bwapi.getMyUnits()) {
-			
-			// if this unit is Terran_SCV (worker),
-			if (unit.getTypeID() == UnitTypes.Terran_SCV.ordinal()) {
-				// and if it is idle (not doing anything),
-				if (unit.isIdle()) {
-					// then find the closest mineral patch (if we see any)
+			if (unit.getTypeID() == UnitTypes.Protoss_Photon_Cannon.ordinal()) {
+				if (unit.isIdle()) {		
 					int closestId = -1;
 					double closestDist = 99999999;
-					for (Unit neu : bwapi.getNeutralUnits()) {
-						if ((neu.getTypeID() == UnitTypes.Resource_Mineral_Field.ordinal() && !refineryBuilt)) { 
-							double distance = Math.sqrt(Math.pow(neu.getX() - unit.getX(), 2) + Math.pow(neu.getY() - unit.getY(), 2));
-							if ((closestId == -1) || (distance < closestDist)) {
-								closestDist = distance;
-								closestId = neu.getID();
+					int unitToKill = 0;
+					while ((closestId == -1)&&(unitToKill < killOrder.size() )) {
+						for (Unit neu : bwapi.getNeutralUnits()) {
+							if (neu.getTypeID() == killOrder.elementAt(unitToKill).ordinal()) {
+								double distance = Math.sqrt(Math.pow(neu.getX() - unit.getX(), 2) + Math.pow(neu.getY() - unit.getY(), 2));
+								if ((closestId == -1) || (distance < closestDist)) {
+									closestDist = distance;
+									closestId = neu.getID();
+								}
 							}
 						}
-					}
-					for (Unit neu : bwapi.getMyUnits()) {
-						if ((neu.getTypeID() == UnitTypes.Terran_Refinery.ordinal()) && academyBuilt) {
-							System.out.println(neu.getTypeID() == UnitTypes.Terran_Refinery.ordinal());
-							double distance = Math.sqrt(Math.pow(neu.getX() - unit.getX(), 2) + Math.pow(neu.getY() - unit.getY(), 2));
-							if ((closestId == -1) || (distance < closestDist)) {
-								closestDist = distance;
-								closestId = neu.getID();
-							}
-						}
+						unitToKill ++;
 					}
 					// and (if we found it) send this worker to gather it.
-					if (closestId != -1) {
-						bwapi.rightClick(unit.getID(), closestId);
-					}
-				}
-			}
-		}
-		
-		
-		
-		// And let's build some Supply Refineries if we are low on supply (if free supply is less than 3).
-					// Check if we have enough minerals,
-		if (!refineryBuilt && bwapi.getSelf().getMinerals() >= 100) {
-			// try to find the worker near our home position
-			int worker = getNearestUnit(UnitTypes.Terran_SCV.ordinal(), homePositionX + 100, homePositionY + 100);
-			if (worker != -1) {
-				// if we found him, try to select appropriate build tile position for refinery (near our home base)
-				Point buildTile = getBuildTile(worker, UnitTypes.Terran_Refinery.ordinal(), homePositionX, homePositionY);
-				// if we found a good build position, and we aren't already constructing a Supply Depot, 
-				// order our worker to build it
-				if ((buildTile.x != -1) && (!weAreBuilding(UnitTypes.Terran_Refinery.ordinal()))) {
-					refineryBuilt = true;
-					bwapi.build(worker, buildTile.x, buildTile.y, UnitTypes.Terran_Refinery.ordinal());
-				}
-			}
-			
-		}
-		
-		if (refineryBuilt && !barrackBuilt && bwapi.getSelf().getMinerals() >= 200) {
-			// try to find the worker near our home position
-			int worker = getNearestUnit(UnitTypes.Terran_SCV.ordinal(), homePositionX + 100, homePositionY + 100);
-			if (worker != -1) {
-				// if we found him, try to select appropriate build tile position for barracks (near our home base)
-				Point buildTile = getBuildTile(worker, UnitTypes.Terran_Barracks.ordinal(), homePositionX, homePositionY);
-				// if we found a good build position, and we aren't already constructing a Supply Depot, 
-				// order our worker to build it
-				if ((buildTile.x != -1) && (!weAreBuilding(UnitTypes.Terran_Barracks.ordinal()))) {
-					barrackBuilt = true;
-					bwapi.build(worker, buildTile.x, buildTile.y, UnitTypes.Terran_Barracks.ordinal());
-				}
-			}
-			
-		}
-		
-		
-		
-		
-		// And let's build some Supply Depots if we are low on supply (if free supply is less than 3).
-		// Check if we have enough minerals,
-		if (((bwapi.getSelf().getSupplyTotal() - bwapi.getSelf().getSupplyUsed())/2) < 3){
-			if (bwapi.getSelf().getMinerals() >= 100) {
-				// try to find the worker near our home position
-				int worker = getNearestUnit(UnitTypes.Terran_SCV.ordinal(), homePositionX, homePositionY);
-				if (worker != -1) {
-					// if we found him, try to select appropriate build tile position for supply depot (near our home base)
-					Point buildTile = getBuildTile(worker, UnitTypes.Terran_Supply_Depot.ordinal(), homePositionX, homePositionY);
-					// if we found a good build position, and we aren't already constructing a Supply Depot, 
-					// order our worker to build it
-					if ((buildTile.x != -1) && (!weAreBuilding(UnitTypes.Terran_Supply_Depot.ordinal()))) {
-						bwapi.build(worker, buildTile.x, buildTile.y, UnitTypes.Terran_Supply_Depot.ordinal());
-					}
+					if (closestId != -1) bwapi.attack(unit.getID(), closestId);
 				}
 			}
 		}
@@ -234,7 +165,7 @@ public class JavaBot implements BWAPIEventListener {
 	}
 
 	// Some additional event-related methods.
-	public void gameEnded() {}
+	
 	public void matchEnded(boolean winner) {}
 	public void nukeDetect(int x, int y) {}
 	public void nukeDetect() {}
@@ -335,7 +266,11 @@ public class JavaBot implements BWAPIEventListener {
 	public void drawDebugInfo() {
 
 		// Draw our home position.
-		bwapi.drawText(new Point(5,0), "Our home position: "+String.valueOf(homePositionX)+","+String.valueOf(homePositionY), true);
+		bwapi.drawText(new Point(5,0), "Kill order: ", true);
+		for (int i=0; i<killOrder.size(); i++)
+		{
+			bwapi.drawText(new Point(5,10*(i+2)), killOrder.elementAt(i).name(), true);
+		}
 		
 		// Draw circles over workers (blue if they're gathering minerals, green if gas, yellow if they're constructing).
 		for (Unit u : bwapi.getMyUnits())  {
